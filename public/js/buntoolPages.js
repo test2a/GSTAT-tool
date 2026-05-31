@@ -35,7 +35,10 @@ async function loadFontBytes(pdfDoc, fontName) {
   if (fontConfig.standard) {
     return await pdfDoc.embedFont(fontConfig.standard);
   } else if (fontConfig.url) {
-    const fontBytes = await fetch(fontConfig.url).then(res => res.arrayBuffer());
+    const baseUrl = window.BUNTOOL_BASE_URL || '/';
+    const prefix = baseUrl.replace(/\/$/, '');
+    const url = prefix + fontConfig.url;
+    const fontBytes = await fetch(url).then(res => res.arrayBuffer());
     return await pdfDoc.embedFont(fontBytes);
   }
 }
@@ -328,6 +331,7 @@ export function addPageNumberingViaWorker(pdfBytes, config) {
     'pageNumbering.footerFont':       config.getOption('pageNumbering.footerFont'),
     'pageNumbering.footerFontSize':   config.getOption('pageNumbering.footerFontSize'),
     'pageNumbering.pageNumberColour': config.getOption('pageNumbering.pageNumberColour'),
+    'buntoolBaseUrl':                 window.BUNTOOL_BASE_URL || '/',
   };
 
   const buf = pdfBytes.buffer.byteLength === pdfBytes.byteLength

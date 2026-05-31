@@ -26,12 +26,14 @@ const FONT_CONFIG = {
   traditional: { url: '/fonts/trad/EBGaramond-VariableFont_wght.ttf' },
 };
 
-async function loadFont(pdfDoc, fontName) {
+async function loadFont(pdfDoc, fontName, baseUrl = '/') {
   const fontConfig = FONT_CONFIG[fontName] || FONT_CONFIG.helvetica;
   if (fontConfig.standard) {
     return pdfDoc.embedFont(fontConfig.standard);
   }
-  const fontBytes = await fetch(fontConfig.url).then(r => r.arrayBuffer());
+  const prefix = baseUrl.replace(/\/$/, '');
+  const url = prefix + fontConfig.url;
+  const fontBytes = await fetch(url).then(r => r.arrayBuffer());
   return pdfDoc.embedFont(fontBytes);
 }
 
@@ -45,11 +47,12 @@ async function doAddPageNumbering(buffer, cv) {
   const footerLabelText    = cv['pageNumbering.footerPrefix'] ?? '';
   const footerAlignment    = cv['pageNumbering.alignment'];
   const footerFont         = cv['pageNumbering.footerFont'];
+  const baseUrl            = cv['buntoolBaseUrl'] ?? '/';
 
   const pdfDoc = await pdflib.PDFDocument.load(new Uint8Array(buffer));
   const pages  = pdfDoc.getPages();
   pdfDoc.registerFontkit(fontkit);
-  const textLabelFont = await loadFont(pdfDoc, footerFont);
+  const textLabelFont = await loadFont(pdfDoc, footerFont, baseUrl);
 
   let textLabelSize = ({ large: 25, medium: 18, small: 14 })[cv['pageNumbering.footerFontSize']] || 18;
 

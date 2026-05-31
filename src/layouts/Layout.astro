@@ -21,6 +21,20 @@ const { title, description = "Create professional court bundles with on-device P
 		<title>{title}</title>
 		
 		<script is:inline define:vars={{ baseUrl: import.meta.env.BASE_URL }}>
+			window.BUNTOOL_BASE_URL = baseUrl;
+			
+			// Intercept absolute font fetches in the main thread to prepend base path when hosted at a subpath
+			if (baseUrl !== '/') {
+				const prefix = baseUrl.replace(/\/$/, '');
+				const originalFetch = window.fetch;
+				window.fetch = function (input, init) {
+					if (typeof input === 'string' && input.startsWith('/fonts/')) {
+						return originalFetch(prefix + input, init);
+					}
+					return originalFetch(input, init);
+				};
+			}
+
 			// Automatically rewrite absolute links and assets at runtime when hosted at a subpath (e.g. GitHub Pages)
 			if (baseUrl !== '/') {
 				const prefix = baseUrl.replace(/\/$/, '');

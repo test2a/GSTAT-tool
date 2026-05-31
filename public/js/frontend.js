@@ -1266,11 +1266,6 @@ function showBundleReadyState(pdfBytes, filename) {
         });
         document.getElementById('save-defaults-no')?.addEventListener('click', () => defaultsPrompt.remove());
       }
-
-      const kofi = document.createElement('div');
-      kofi.className = 'mt-3 pt-2 border-t border-gray-700 text-center';
-      kofi.innerHTML = `<a href="https://ko-fi.com/buntool" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs text-white bg-pink-500 hover:bg-pink-600 rounded px-3 py-1.5 transition-colors">☕ Helpful? Donate to support!</a>`;
-      _lastEl.after(kofi);
     }
 
     document.getElementById('overlay-save-btn')?.addEventListener('click', () => {

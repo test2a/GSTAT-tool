@@ -4,7 +4,7 @@ This is the public repo for the website at https://github.com/test2a/GSTAT-tool.
 
 **Automatically create GSTAT ready bundles in seconds.**
 
-STHe tool is used to take in PDFs and produce perfect GSTAT website bundles. It processes PDF files and generates merged outputs with:
+The tool is used to take in PDFs and produce perfect GSTAT website bundles. It processes PDF files and generates merged outputs with:
 
 - Automatic index/table of contents
 - Hyperlinked page numbers

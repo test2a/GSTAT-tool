@@ -1,0 +1,49 @@
+---
+import '../styles/global.css';
+
+interface Props {
+	title: string;
+	description?: string;
+}
+
+const { title, description = "Create professional court bundles with on-device PDF processing" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" type="image/x-icon" href={`${import.meta.env.BASE_URL}favicon.ico`} />
+		<link rel="apple-touch-icon" sizes="180x180" href={`${import.meta.env.BASE_URL}images/buntool-logo-square.png`} />
+		<meta name="generator" content={Astro.generator} />
+		<meta name="description" content={description} />
+		<title>{title}</title>
+		
+		<script is:inline define:vars={{ baseUrl: import.meta.env.BASE_URL }}>
+			// Automatically rewrite absolute links and assets at runtime when hosted at a subpath (e.g. GitHub Pages)
+			if (baseUrl !== '/') {
+				const prefix = baseUrl.replace(/\/$/, '');
+				document.addEventListener('DOMContentLoaded', () => {
+					// Rewrite navigation links
+					document.querySelectorAll('a[href^="/"]').forEach(a => {
+						const href = a.getAttribute('href');
+						if (href && !href.startsWith('//')) {
+							a.setAttribute('href', prefix + href);
+						}
+					});
+					// Rewrite image sources
+					document.querySelectorAll('img[src^="/"]').forEach(img => {
+						const src = img.getAttribute('src');
+						if (src && !src.startsWith('//')) {
+							img.setAttribute('src', prefix + src);
+						}
+					});
+				});
+			}
+		</script>
+	</head>
+	<body class="bg-stone-100 text-gray-900">
+		<slot />
+	</body>
+</html>

@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Section Splitter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:ital,wght@0,300;0,700;1,300&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e10; --surface: #18181c; --border: #2a2a32;
+    --accent: #c8f060; --accent2: #60c8f0;
+    --text: #e8e8ec; --muted: #666680; --danger: #f06060; --warn: #f0b860;
+  }
+
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 3rem 1.5rem; overflow-x: hidden;
+  }
+
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(200,240,96,0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 60% at 10% 80%, rgba(96,200,240,0.05) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  header, .card { position: relative; z-index: 1; }
+  header { width: 100%; max-width: 800px; margin-bottom: 3rem; }
+
+  .tag {
+    font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--accent); border: 1px solid var(--accent);
+    display: inline-block; padding: 0.2em 0.7em; margin-bottom: 1.2rem;
+  }
+  h1 {
+    font-family: 'Fraunces', serif; font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 700; line-height: 1.1; letter-spacing: -0.02em;
+  }
+  h1 em { font-style: italic; color: var(--accent); }
+  .subtitle { margin-top: 0.8rem; color: var(--muted); font-size: 0.8rem; line-height: 1.6; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 2px; padding: 2rem;
+    width: 100%; max-width: 800px; margin-bottom: 1.5rem;
+  }
+  .card-title {
+    font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 1.2rem; padding-bottom: 0.8rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  #drop-zone {
+    border: 1.5px dashed var(--border); border-radius: 2px;
+    padding: 3rem 2rem; text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  #drop-zone:hover, #drop-zone.drag-over { border-color: var(--accent); background: rgba(200,240,96,0.03); }
+  #drop-zone .icon { font-size: 2.5rem; margin-bottom: 1rem; display: block; opacity: 0.4; }
+  #drop-zone p { font-size: 0.8rem; color: var(--muted); }
+  #drop-zone strong { color: var(--accent); }
+  #file-input { display: none; }
+
+  .info-bar {
+    display: flex; align-items: center; gap: 1rem; padding: 0.7rem 1rem;
+    background: rgba(200,240,96,0.05); border: 1px solid rgba(200,240,96,0.2);
+    border-radius: 2px; margin-bottom: 1.2rem;
+    font-size: 0.75rem; color: var(--accent); animation: fadeIn 0.3s ease;
+  }
+
+  .banner {
+    display: flex; align-items: flex-start; gap: 0.8rem;
+    padding: 0.85rem 1rem; border-radius: 2px;
+    font-size: 0.78rem; line-height: 1.5; margin-bottom: 1.2rem;
+    animation: fadeIn 0.3s ease;
+  }
+  .banner.success { background: rgba(200,240,96,0.07); border: 1px solid rgba(200,240,96,0.25); color: var(--accent); }
+  .banner.warning { background: rgba(240,184,96,0.07); border: 1px solid rgba(240,184,96,0.25); color: var(--warn); }
+  .banner.info    { background: rgba(96,200,240,0.07); border: 1px solid rgba(96,200,240,0.25); color: var(--accent2); }
+  .banner .bicon  { font-size: 1rem; flex-shrink: 0; margin-top: 0.1rem; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+
+  .raw-toggle {
+    background: none; border: none; color: var(--muted);
+    font-family: 'DM Mono', monospace; font-size: 0.63rem;
+    cursor: pointer; text-decoration: underline; padding: 0;
+  }
+  .raw-toggle:hover { color: var(--accent2); }
+
+  #raw-box {
+    display: none; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 2px; padding: 0.9rem; font-size: 0.68rem; color: var(--muted);
+    white-space: pre-wrap; word-break: break-all;
+    max-height: 240px; overflow-y: auto; margin-bottom: 1.2rem; line-height: 1.8;
+  }
+
+  .output-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  .output-item {
+    display: flex; align-items: flex-start; gap: 0.8rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--border); border-radius: 2px;
+    animation: fadeIn 0.25s ease;
+  }
+  .output-item.cover  { border-color: rgba(96,200,240,0.3);  background: rgba(96,200,240,0.04); }
+  .output-item.index  { border-color: rgba(176,130,240,0.3); background: rgba(176,130,240,0.04); }
+  .output-item.section{ border-color: rgba(200,240,96,0.2);  background: rgba(200,240,96,0.03); }
+
+  .item-type-badge {
+    font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 0.15em 0.55em; border-radius: 2px; flex-shrink: 0;
+    white-space: nowrap; margin-top: 0.15rem;
+  }
+  .cover  .item-type-badge { background: rgba(96,200,240,0.2);  color: var(--accent2); border: 1px solid rgba(96,200,240,0.3); }
+  .index  .item-type-badge { background: rgba(176,130,240,0.2); color: #b082f0;        border: 1px solid rgba(176,130,240,0.3); }
+  .section .item-type-badge{ background: rgba(200,240,96,0.15); color: var(--accent);  border: 1px solid rgba(200,240,96,0.3); }
+
+  .item-label { flex: 1; min-width: 0; }
+
+  .item-name input {
+    background: transparent; border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.82rem;
+    outline: none; width: 100%; padding: 0.1rem 0.2rem;
+    transition: border-color 0.15s;
+  }
+  .item-name input:focus { border-bottom-color: var(--accent); }
+  .item-meta { font-size: 0.65rem; color: var(--muted); margin-top: 0.2rem; }
+
+  .merge-option {
+    display: flex; align-items: flex-start; gap: 0.5rem;
+    margin-top: 0.5rem; padding: 0.45rem 0.65rem;
+    background: rgba(200,240,96,0.04); border: 1px solid rgba(200,240,96,0.15);
+    border-radius: 2px; font-size: 0.67rem; color: var(--muted);
+  }
+  .merge-option input[type="checkbox"] {
+    width: 13px; height: 13px; cursor: pointer;
+    accent-color: var(--accent); flex-shrink: 0; margin-top: 0.1rem;
+  }
+  .merge-option label { cursor: pointer; line-height: 1.5; }
+  .merge-option strong { color: var(--accent); }
+
+  .sec-files { margin-top: 0.4rem; padding-left: 0.5rem; border-left: 1px solid var(--border); }
+  .sec-file-row {
+    font-size: 0.66rem; color: var(--muted); padding: 0.15rem 0;
+    display: flex; gap: 0.5rem; align-items: baseline;
+  }
+  .sec-file-num  { opacity: 0.5; flex-shrink: 0; width: 1.2rem; text-align: right; }
+  .sec-file-title{ flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sec-file-pg   { opacity: 0.5; flex-shrink: 0; }
+
+  .btn {
+    font-family: 'DM Mono', monospace; font-size: 0.78rem;
+    padding: 0.65rem 1.4rem; border-radius: 2px; cursor: pointer;
+    transition: all 0.15s; border: none; letter-spacing: 0.04em;
+  }
+  .btn-ghost { background: none; border: 1px solid var(--border); color: var(--muted); }
+  .btn-ghost:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn-primary { background: var(--accent); color: var(--bg); font-weight: 500; }
+  .btn-primary:hover { background: #d9ff6e; }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+  .actions { display: flex; gap: 0.8rem; margin-top: 1.2rem; flex-wrap: wrap; }
+
+  #log { font-size: 0.75rem; line-height: 1.8; color: var(--muted); min-height: 1.5rem; }
+  #log .ok   { color: var(--accent); }
+  #log .err  { color: var(--danger); }
+  #log .info { color: var(--accent2); }
+
+  .progress-bar { height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; margin: 0.8rem 0; }
+  .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s ease; }
+
+  #results { display: none; }
+  .dl-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.85rem 0; border-bottom: 1px solid var(--border);
+    gap: 1rem; animation: fadeIn 0.35s ease;
+  }
+  .dl-item:last-child { border-bottom: none; }
+  .dl-left { display: flex; align-items: center; gap: 0.7rem; flex: 1; min-width: 0; }
+  .dl-badge {
+    font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.15em 0.5em; border-radius: 2px; flex-shrink: 0;
+  }
+  .dl-badge.cover  { background: rgba(96,200,240,0.15);  color: var(--accent2); border: 1px solid rgba(96,200,240,0.25); }
+  .dl-badge.index  { background: rgba(176,130,240,0.15); color: #b082f0;        border: 1px solid rgba(176,130,240,0.25); }
+  .dl-badge.section{ background: rgba(200,240,96,0.12);  color: var(--accent);  border: 1px solid rgba(200,240,96,0.25); }
+  .dl-badge.merged { background: rgba(240,184,96,0.12);  color: var(--warn);    border: 1px solid rgba(240,184,96,0.25); }
+  .dl-info { flex: 1; min-width: 0; }
+  .dl-name { font-size: 0.82rem; color: var(--text); margin-bottom: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dl-meta { font-size: 0.67rem; color: var(--muted); }
+  .btn-dl {
+    background: none; border: 1px solid var(--accent); color: var(--accent);
+    font-family: 'DM Mono', monospace; font-size: 0.72rem;
+    padding: 0.4rem 1rem; cursor: pointer; border-radius: 2px;
+    transition: all 0.15s; text-decoration: none; display: inline-block;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .btn-dl:hover { background: var(--accent); color: var(--bg); }
+
+  .spinner {
+    display: inline-block; width: 11px; height: 11px;
+    border: 2px solid var(--border); border-top-color: var(--accent2);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 0.35rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #sections-card, #split-card { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tag">Cover · Index · Sections</div>
+  <h1>PDF <em>Section</em><br>Splitter</h1>
+  <p class="subtitle">
+    Detects cover, index, and sections automatically from the index page structure.<br>
+    Cover and index are always downloadable individually — with an option to merge into the first section.
+  </p>
+</header>
+
+<!-- 01 Upload -->
+<div class="card">
+  <div class="card-title">01 — Upload PDF</div>
+  <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <span class="icon">⬆</span>
+    <p><strong>Click to upload</strong> or drag &amp; drop your PDF here</p>
+    <p style="margin-top:0.4rem;font-size:0.7rem;">Rows without serial numbers in the index = section headers</p>
+  </div>
+  <input type="file" id="file-input" accept=".pdf">
+</div>
+
+<!-- 02 Detected outputs -->
+<div class="card" id="sections-card">
+  <div class="card-title">
+    <span>02 — Detected Output Files</span>
+    <button class="raw-toggle" onclick="toggleRaw()">show parsed rows</button>
+  </div>
+  <div id="info-bar" class="info-bar" style="display:none"></div>
+  <div id="banner"></div>
+  <pre id="raw-box"></pre>
+  <div class="output-list" id="output-list"></div>
+  <div class="actions">
+    <button class="btn btn-ghost" onclick="reDetect()">↺ Re-scan</button>
+  </div>
+</div>
+
+<!-- 03 Export -->
+<div class="card" id="split-card">
+  <div class="card-title">03 — Export All</div>
+  <div id="log">Ready.</div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  <div class="actions">
+    <button class="btn btn-primary" id="split-btn" onclick="exportAll()">Export All PDFs</button>
+  </div>
+</div>
+
+<!-- 04 Results -->
+<div class="card" id="results">
+  <div class="card-title">04 — Downloads</div>
+  <div id="downloads-list"></div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let pdfBytes    = null;
+let totalPages  = 0;
+let outputItems = []; // [{type, name, startPage, endPage, files?:[]}]
+
+// ── Upload ────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f?.type === 'application/pdf') handleFile(f);
+});
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+async function handleFile(file) {
+  reset();
+  setBanner('info', '⏳', `<span class="spinner"></span>Reading <strong>${esc(file.name)}</strong>…`);
+  document.getElementById('sections-card').style.display = 'block';
+  document.getElementById('split-card').style.display = 'none';
+
+  pdfBytes = await file.arrayBuffer();
+
+  const { PDFDocument } = PDFLib;
+  const doc = await PDFDocument.load(pdfBytes);
+  totalPages = doc.getPageCount();
+
+  const bar = document.getElementById('info-bar');
+  bar.style.display = 'flex';
+  bar.innerHTML = `<span>📄 ${esc(file.name)}</span><span style="color:var(--muted)">|</span><span>${totalPages} pages</span>`;
+
+  await detect();
+}
+
+function reset() {
+  outputItems = [];
+  document.getElementById('output-list').innerHTML = '';
+  document.getElementById('banner').innerHTML = '';
+  document.getElementById('raw-box').textContent = '';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('downloads-list').innerHTML = '';
+}
+
+// ── Extract rows from a page ───────────────────────────────────
+async function extractRows(pageNum) {
+  const task = pdfjsLib.getDocument({ data: pdfBytes.slice(0) });
+  const pdf  = await task.promise;
+  const page = await pdf.getPage(pageNum);
+  const content = await page.getTextContent({ includeMarkedContent: false });
+
+  const lineMap = new Map();
+  for (const item of content.items) {
+    if (!item.str) continue;
+    const y = item.transform[5];
+    let placed = false;
+    for (const [ly] of lineMap) {
+      if (Math.abs(ly - y) <= 4) { lineMap.get(ly).push(item); placed = true; break; }
+    }
+    if (!placed) lineMap.set(y, [item]);
+  }
+
+  const rows = [];
+  for (const [y, items] of lineMap) {
+    items.sort((a, b) => a.transform[4] - b.transform[4]);
+    const words = items.flatMap(i => i.str.split(/\s+/)).map(w => w.trim()).filter(Boolean);
+    if (!words.length) continue;
+    rows.push({ y, words, firstWord: words[0], rawText: words.join(' ') });
+  }
+
+  rows.sort((a, b) => b.y - a.y);
+  return rows;
+}
+
+// ── Row classifier ────────────────────────────────────────────
+// file    = first word is a plain integer (serial number)
+// header  = bold column header row (Tab, Title, Date, Page…)
+// footer  = "Page N"
+// section = everything else — no serial, not a header
+const HEADER_KW = ['tab', 'title', 'date', 'page', 'sr.no', 'description', 's.no'];
+
+function classifyRow(row) {
+  if (/^\d+$/.test(row.firstWord)) return 'file';
+  if (/^page$/i.test(row.firstWord) && row.words.length === 2 && /^\d+$/.test(row.words[1])) return 'footer';
+  const lower = row.rawText.toLowerCase();
+  const hits  = HEADER_KW.filter(kw => lower.includes(kw)).length;
+  if (hits >= 2) return 'header';
+  return 'section';
+}
+
+// ── Page type detection ───────────────────────────────────────
+// Index page = has the column header row AND at least one numbered file row
+function isIndexPage(rows) {
+  return rows.some(r => classifyRow(r) === 'header') &&
+         rows.some(r => classifyRow(r) === 'file');
+}
+
+// Cover page = any page that is NOT an index page and comes before the index.
+// We do NOT check for absence of numbers — page 1 may have postcodes, phone
+// numbers etc. that look like plain integers. The only reliable signal is that
+// a cover has no index-style header (Tab / Title / Date / Page).
+function isCoverPage(rows) {
+  return !isIndexPage(rows);
+}
+
+// ── Main detection ────────────────────────────────────────────
+async function detect() {
+  setBanner('info', '🔍', '<span class="spinner"></span>Scanning pages…');
+
+  try {
+    let rawLog = '';
+    let coverPageNum = null;
+    let indexPageNum = null;
+    let sections     = [];
+
+    for (let pg = 1; pg <= Math.min(5, totalPages); pg++) {
+      const rows = await extractRows(pg);
+
+      rawLog += `\n=== Page ${pg} ===\n`;
+      rows.forEach(r => {
+        const k = classifyRow(r);
+        const m = k === 'section' ? '▶ SECTION' :
+                  k === 'file'    ? '  file   ' :
+                  k === 'header'  ? '  header ' : '  footer ';
+        rawLog += `  [${m}] ${r.rawText}\n`;
+      });
+
+      if (indexPageNum === null && isIndexPage(rows)) {
+        // Check if the page before this was a cover
+        if (pg > 1 && coverPageNum === null) {
+          const prevRows = await extractRows(pg - 1);
+          if (isCoverPage(prevRows)) coverPageNum = pg - 1;
+        }
+        indexPageNum = pg;
+        sections = parseSections(rows, indexPageNum);
+      }
+
+      if (indexPageNum !== null) break;
+    }
+
+    document.getElementById('raw-box').textContent = rawLog.trim();
+
+    // ── Build output items ──
+    outputItems = [];
+
+    if (coverPageNum !== null) {
+      outputItems.push({ type: 'cover', name: 'cover', startPage: coverPageNum, endPage: coverPageNum, files: [] });
+    }
+
+    if (indexPageNum !== null) {
+      outputItems.push({ type: 'index', name: 'index', startPage: indexPageNum, endPage: indexPageNum, files: [] });
+    }
+
+    for (const sec of sections) {
+      outputItems.push({ type: 'section', ...sec });
+    }
+
+    // Resolve per-file end pages for display
+    const allFiles = sections.flatMap(s => s.files);
+    allFiles.sort((a, b) => a.indexPageRef - b.indexPageRef);
+    for (let i = 0; i < allFiles.length; i++) {
+      allFiles[i].endPage = (i + 1 < allFiles.length)
+        ? allFiles[i + 1].indexPageRef - 1
+        : totalPages;
+      allFiles[i].endPage = Math.min(allFiles[i].endPage, totalPages);
+    }
+
+    if (outputItems.length > 0) {
+      const secCount  = sections.length;
+      const fileCount = sections.reduce((n, s) => n + s.files.length, 0);
+      const extras    = [coverPageNum ? 'cover' : null, indexPageNum ? 'index' : null].filter(Boolean);
+
+      setBanner('success', '✓',
+        (extras.length ? `<strong>${extras.join(' + ')}</strong> detected. ` : '') +
+        `<strong>${secCount} section${secCount !== 1 ? 's' : ''}</strong> with ` +
+        `<strong>${fileCount} file${fileCount !== 1 ? 's' : ''}</strong>. ` +
+        `${outputItems.length} PDFs will be exported.`);
+
+      renderOutputList(outputItems);
+    } else {
+      setBanner('warning', '⚠', 'Could not detect structure. Click "show parsed rows" to inspect.');
+    }
+
+    document.getElementById('split-card').style.display = 'block';
+    setLog('Review output files above, then click <strong>Export All PDFs</strong>.');
+    setProgress(0);
+
+  } catch (err) {
+    setBanner('warning', '⚠', `Error: ${esc(err.message)}`);
+    document.getElementById('split-card').style.display = 'block';
+    console.error(err);
+  }
+}
+
+// ── Parse sections from index page rows ───────────────────────
+function parseSections(rows, indexPageNum) {
+  const DATE_RE = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$|^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/;
+  const sections = [];
+  let current = null;
+
+  for (const row of rows) {
+    const kind = classifyRow(row);
+
+    if (kind === 'section') {
+      const label = row.rawText.trim();
+      const safeName = label
+        .replace(/[^\w\s\-()/]/g, ' ')
+        .replace(/\s+/g, '_').replace(/^_|_$/g, '')
+        || `Section_${sections.length + 1}`;
+      current = { label, name: safeName, startPage: null, endPage: null, files: [] };
+      sections.push(current);
+
+    } else if (kind === 'file' && current) {
+      const words = row.words.slice(1); // drop serial number
+      let filePage = null;
+      let titleWords = [];
+      for (let i = words.length - 1; i >= 0; i--) {
+        if (/^\d+$/.test(words[i])) {
+          const n = parseInt(words[i]);
+          if (n >= 1 && n <= totalPages) {
+            filePage = n;
+            titleWords = words.slice(0, i);
+            break;
+          }
+        }
+      }
+      if (filePage === null) continue;
+
+      const title = titleWords.filter(t => !DATE_RE.test(t)).join(' ').trim()
+        || `File ${row.firstWord}`;
+
+      current.files.push({ serial: row.firstWord, title, startPage: filePage, endPage: null, indexPageRef: filePage });
+    }
+  }
+
+  const filtered = sections.filter(s => s.files.length > 0);
+
+  // ── Assign section page ranges ──
+  // First section starts immediately after the index page
+  // Each section ends where the next section's first file begins
+  // Last section runs to end of document
+  for (let i = 0; i < filtered.length; i++) {
+    filtered[i].startPage = (i === 0)
+      ? indexPageNum + 1
+      : filtered[i - 1].endPage + 1;
+
+    const nextStart = (i + 1 < filtered.length)
+      ? filtered[i + 1].files[0].indexPageRef
+      : totalPages + 1;
+
+    filtered[i].endPage = Math.min(nextStart - 1, totalPages);
+  }
+
+  return filtered;
+}
+
+// ── Render output item list ───────────────────────────────────
+function renderOutputList(items) {
+  const container = document.getElementById('output-list');
+  container.innerHTML = '';
+
+  // Find the first section item for merge targeting
+  const firstSection = items.find(i => i.type === 'section');
+
+  items.forEach((item, idx) => {
+    const div = document.createElement('div');
+    div.className = `output-item ${item.type}`;
+
+    const sp = item.startPage, ep = item.endPage;
+    const pgStr = sp === ep ? `p.${sp}` : `pp.${sp}–${ep}`;
+
+    const typeLabel = item.type === 'cover' ? 'Cover' :
+                      item.type === 'index' ? 'Index' : 'Section';
+
+    const metaParts = [];
+    if (item.type === 'section') metaParts.push(`${item.files.length} file${item.files.length !== 1 ? 's' : ''}`);
+    metaParts.push(pgStr);
+
+    // Files sub-list for sections
+    const filesHtml = (item.files && item.files.length > 0)
+      ? `<div class="sec-files">${item.files.map(f =>
+          `<div class="sec-file-row">
+            <span class="sec-file-num">${esc(f.serial)}</span>
+            <span class="sec-file-title" title="${esc(f.title)}">${esc(f.title)}</span>
+            <span class="sec-file-pg">pp.${f.startPage}–${f.endPage}</span>
+          </div>`).join('')}</div>`
+      : '';
+
+    // Merge option: for BOTH cover and index, pointing to the first section
+    let mergeHtml = '';
+    if ((item.type === 'cover' || item.type === 'index') && firstSection) {
+      const pageLabel = item.type === 'cover' ? 'cover page' : 'index page';
+      mergeHtml = `
+        <div class="merge-option">
+          <input type="checkbox" id="merge-${idx}">
+          <label for="merge-${idx}">
+            Also include this ${pageLabel} at the start of <strong>${esc(firstSection.name)}</strong>
+            <span style="opacity:0.5;display:block;font-size:0.63rem;">
+              Downloads individually above AND as part of the merged section PDF
+            </span>
+          </label>
+        </div>
+      `;
+    }
+
+    div.innerHTML = `
+      <span class="item-type-badge">${typeLabel}</span>
+      <div class="item-label">
+        <div class="item-name">
+          <input type="text" id="outname-${idx}" value="${esc(item.name)}" title="Output filename (editable)">
+        </div>
+        <div class="item-meta">${metaParts.join(' · ')}</div>
+        ${mergeHtml}
+        ${filesHtml}
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// ── Export ────────────────────────────────────────────────────
+async function exportAll() {
+  if (!pdfBytes || !outputItems.length) {
+    setLog('<span class="err">⚠ Nothing to export.</span>'); return;
+  }
+
+  document.getElementById('split-btn').disabled = true;
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('downloads-list').innerHTML = '';
+  setProgress(0);
+
+  const { PDFDocument } = PDFLib;
+  const srcDoc = await PDFDocument.load(pdfBytes);
+  const dlList = document.getElementById('downloads-list');
+
+  // Find first section item and index
+  const firstSecIdx = outputItems.findIndex(i => i.type === 'section');
+
+  // Collect pages to prepend (from checked cover/index items)
+  const prependPages = []; // page indices (0-based) to prepend to first section
+  const prependLabels = [];
+
+  for (let i = 0; i < outputItems.length; i++) {
+    const item = outputItems[i];
+    if (item.type !== 'cover' && item.type !== 'index') continue;
+    const cb = document.getElementById(`merge-${i}`);
+    if (cb && cb.checked) {
+      for (let p = item.startPage - 1; p <= item.endPage - 1; p++) {
+        if (p >= 0 && p < totalPages) prependPages.push(p);
+      }
+      prependLabels.push(`pp.${item.startPage}–${item.endPage}`);
+    }
+  }
+
+  let exportCount = 0;
+
+  for (let i = 0; i < outputItems.length; i++) {
+    const item = outputItems[i];
+    const name = document.getElementById(`outname-${i}`)?.value.trim() || item.name;
+    const sp = item.startPage, ep = item.endPage;
+
+    // ── Always export this item individually ──
+    const indices = [];
+    for (let p = sp - 1; p <= ep - 1; p++) {
+      if (p >= 0 && p < totalPages) indices.push(p);
+    }
+
+    if (indices.length) {
+      setLog(`<span class="info"><span class="spinner"></span>Exporting <strong>${esc(name)}</strong> (pages ${sp}–${ep})…</span>`);
+      setProgress((i / (outputItems.length + (prependPages.length ? 1 : 0))) * 85);
+
+      const newDoc = await PDFDocument.create();
+      const copied = await newDoc.copyPages(srcDoc, indices);
+      copied.forEach(p => newDoc.addPage(p));
+
+      const bytes = await newDoc.save();
+      const url   = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+
+      const typeLabel = item.type === 'cover' ? 'Cover' :
+                        item.type === 'index' ? 'Index' : 'Section';
+
+      const dlItem = document.createElement('div');
+      dlItem.className = 'dl-item';
+      dlItem.innerHTML = `
+        <div class="dl-left">
+          <span class="dl-badge ${item.type}">${typeLabel}</span>
+          <div class="dl-info">
+            <div class="dl-name">${esc(name)}.pdf</div>
+            <div class="dl-meta">pages ${sp}–${ep} · ${indices.length} page${indices.length !== 1 ? 's' : ''} · ${(bytes.byteLength/1024).toFixed(1)} KB</div>
+          </div>
+        </div>
+        <a class="btn-dl" href="${url}" download="${esc(name)}.pdf">↓ Download</a>
+      `;
+      dlList.appendChild(dlItem);
+      exportCount++;
+    }
+
+    // ── If this is the first section and there are pages to prepend, also export merged ──
+    if (i === firstSecIdx && prependPages.length > 0) {
+      const mergedName = document.getElementById(`outname-${i}`)?.value.trim()
+        ? `${document.getElementById(`outname-${i}`).value.trim()}_merged`
+        : `${item.name}_merged`;
+
+      setLog(`<span class="info"><span class="spinner"></span>Exporting merged <strong>${esc(mergedName)}</strong>…</span>`);
+
+      const mergedIndices = [
+        ...prependPages,
+        ...Array.from({ length: ep - sp + 1 }, (_, k) => sp - 1 + k).filter(p => p >= 0 && p < totalPages)
+      ];
+
+      const mergedDoc = await PDFDocument.create();
+      const mergedCopied = await mergedDoc.copyPages(srcDoc, mergedIndices);
+      mergedCopied.forEach(p => mergedDoc.addPage(p));
+
+      const mergedBytes = await mergedDoc.save();
+      const mergedUrl   = URL.createObjectURL(new Blob([mergedBytes], { type: 'application/pdf' }));
+      const mergedStart = Math.min(...prependPages) + 1;
+
+      const mergedItem = document.createElement('div');
+      mergedItem.className = 'dl-item';
+      mergedItem.innerHTML = `
+        <div class="dl-left">
+          <span class="dl-badge merged">Merged</span>
+          <div class="dl-info">
+            <div class="dl-name">${esc(mergedName)}.pdf</div>
+            <div class="dl-meta">
+              ${prependLabels.join(' + ')} + pp.${sp}–${ep} ·
+              ${mergedIndices.length} pages ·
+              ${(mergedBytes.byteLength/1024).toFixed(1)} KB
+            </div>
+          </div>
+        </div>
+        <a class="btn-dl" href="${mergedUrl}" download="${esc(mergedName)}.pdf">↓ Download</a>
+      `;
+      dlList.appendChild(mergedItem);
+      exportCount++;
+    }
+  }
+
+  setProgress(100);
+  setLog(`<span class="ok">✓ ${exportCount} PDF${exportCount !== 1 ? 's' : ''} ready.</span>`);
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('split-btn').disabled = false;
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function reDetect() {
+  if (!pdfBytes) return;
+  reset();
+  document.getElementById('sections-card').style.display = 'block';
+  detect();
+}
+
+function setBanner(type, icon, html) {
+  document.getElementById('banner').innerHTML =
+    `<div class="banner ${type}"><span class="bicon">${icon}</span><div>${html}</div></div>`;
+}
+function setLog(html)     { document.getElementById('log').innerHTML = html; }
+function setProgress(pct) { document.getElementById('progress-fill').style.width = pct + '%'; }
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function toggleRaw() {
+  const box = document.getElementById('raw-box');
+  const btn = document.querySelector('.raw-toggle');
+  const open = box.style.display === 'block';
+  box.style.display = open ? 'none' : 'block';
+  btn.textContent   = open ? 'show parsed rows' : 'hide parsed rows';
+}
+</script>
+</body>
+</html>

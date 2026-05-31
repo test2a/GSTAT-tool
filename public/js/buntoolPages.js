@@ -27,7 +27,7 @@ const FONT_CONFIG = {
     serif: { url: '/fonts/serif/NotoSerif-Regular.ttf' },
     sansSerif: { url: '/fonts/sans/static/PlusJakartaSans-Regular.ttf' },
     monospaced: { url: '/fonts/mono/UbuntuMono-Regular.ttf' },
-    traditional: { url: '/fonts/trad/EBGaramond-VariableFont_wght.ttf' },
+    traditional: { url: '/fonts/trad/static/EBGaramond-Regular.ttf' },
 };
 
 async function loadFontBytes(pdfDoc, fontName) {

@@ -417,6 +417,22 @@ window.addEventListener('DOMContentLoaded', () => {
         triggerGroupBtnClick('indexFontSize', 'medium');
         triggerGroupBtnClick('footerFontSize', 'medium');
 
+        // Put "Index" in bundle title
+        _set('config-bundleTitle', 'Index');
+
+        // Uncheck and hide Claim Number
+        _set('config-claimNumber', '');
+        const claimDiv = document.getElementById('config-claimNumber')?.closest('div');
+        if (claimDiv) claimDiv.style.display = 'none';
+
+        // Uncheck and hide Confidential Checkbox
+        _chk('config-confidential', false);
+        const confDiv = document.getElementById('config-confidential')?.closest('div');
+        if (confDiv) confDiv.style.display = 'none';
+
+        // Set printable bundle to off in advanced settings
+        _chk('config-printableBundle', false);
+
         alert('GSTAT Compliant preset applied successfully!');
         markDirty();
       }
@@ -424,6 +440,24 @@ window.addEventListener('DOMContentLoaded', () => {
       alert('Please select a GSTAT preset from the dropdown first.');
     }
   });
+
+  // Dynamic preset template visibility listener
+  const presetSelect = document.getElementById('config-presetTemplate');
+  const updatePresetFieldsVisibility = () => {
+    const isGstat = presetSelect?.value === 'gstat';
+    const claimDiv = document.getElementById('config-claimNumber')?.closest('div');
+    const confDiv = document.getElementById('config-confidential')?.closest('div');
+    if (isGstat) {
+      if (claimDiv) claimDiv.style.display = 'none';
+      if (confDiv) confDiv.style.display = 'none';
+    } else {
+      if (claimDiv) claimDiv.style.display = '';
+      if (confDiv) confDiv.style.display = '';
+    }
+  };
+  presetSelect?.addEventListener('change', updatePresetFieldsVisibility);
+  // Run initially
+  updatePresetFieldsVisibility();
 });
 
 function addSectionBreak(title) {
@@ -994,6 +1028,9 @@ function showBundleReadyState(pdfBytes, filename) {
     const overlay = document.getElementById('processing-overlay');
     if (!overlay) return;
 
+    // Hide the progress track to save vertical space
+    document.getElementById('processing-track')?.classList.add('hidden');
+
     // Swap spinner row for success header
     const spinnerRow = overlay.querySelector('.flex.items-center.gap-3.mb-4');
     if (spinnerRow) {
@@ -1036,15 +1073,65 @@ function showBundleReadyState(pdfBytes, filename) {
         try {
           const autoSplitEnabled = document.getElementById('config-autoSplit')?.checked ?? true;
           if (!autoSplitEnabled) return;
-          const { extractBundleMetadata } = await import('./buntoolRestore.js');
-          const metadata = extractBundleMetadata(pdfBytes);
+
+          let metadata = null;
+          try {
+            const { extractBundleMetadata } = await import('./buntoolRestore.js');
+            metadata = extractBundleMetadata(pdfBytes);
+          } catch (e) {
+            console.warn('Could not read metadata from PDF:', e);
+          }
+
+          const { PDFDocument } = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
+          const srcDoc = await PDFDocument.load(pdfBytes);
+          const totalPages = srcDoc.getPageCount();
+          const coversheetOffset = config.getOption('pageOptions.coversheet') ? 1 : 0;
+
+          // Reconstruct metadata from in-memory global indexData if extraction failed or returned empty
+          if (!metadata || !Array.isArray(metadata) || metadata.length === 0) {
+            console.log('Reconstructing metadata from indexData...');
+            metadata = [];
+            let pdfPageCountTracker = 0;
+            let sectionNumberTracker = 0;
+            const printableBundle = config.getOption('pageOptions.printableBundle') === true;
+
+            const totalFilePages = indexData.reduce((sum, entry) => {
+              if (entry.sectionMarker === 1) return sum;
+              const willAddBlank = printableBundle && (entry.pageCount % 2 === 1);
+              return sum + entry.pageCount + (willAddBlank ? 1 : 0);
+            }, 0);
+
+            const expectedLengthOfToc = totalPages - coversheetOffset - totalFilePages;
+
+            for (let i = 0; i < indexData.length; i++) {
+              const entry = indexData[i];
+              if (entry.sectionMarker === 1) {
+                sectionNumberTracker++;
+                const hasFilesAfter = indexData.slice(i + 1).some(e => e.sectionMarker === 0 || !e.sectionMarker);
+                const sectionBeginPage = hasFilesAfter
+                  ? pdfPageCountTracker + 1 + coversheetOffset + expectedLengthOfToc
+                  : pdfPageCountTracker + coversheetOffset + expectedLengthOfToc;
+                metadata.push({
+                  section: true,
+                  title: entry.title,
+                  page: sectionBeginPage
+                });
+              } else {
+                const startPage = pdfPageCountTracker + 1 + coversheetOffset + expectedLengthOfToc;
+                metadata.push({
+                  section: false,
+                  title: entry.title,
+                  page: startPage
+                });
+                const willAddBlank = printableBundle && (entry.pageCount % 2 === 1);
+                pdfPageCountTracker += entry.pageCount + (willAddBlank ? 1 : 0);
+              }
+            }
+          }
+
           if (metadata && Array.isArray(metadata)) {
             const documentEntries = metadata.filter(entry => entry.section !== true);
             if (documentEntries.length > 0) {
-              const { PDFDocument } = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
-              const srcDoc = await PDFDocument.load(pdfBytes);
-              const totalPages = srcDoc.getPageCount();
-              const coversheetOffset = config.getOption('pageOptions.coversheet') ? 1 : 0;
               const tocLength = documentEntries[0].page - 1 - coversheetOffset;
 
               const sections = [];
@@ -1625,8 +1712,12 @@ form.addEventListener('submit', async (e) => {
     }
   });
 
-  if (indexData.length === 0) {
-    showErrorModal({ title: 'No documents added', message: 'Please add at least one document before creating a bundle.' });
+  const documentCount = indexData.filter(e => e.sectionMarker !== 1).length;
+  if (documentCount === 0 || filesMap.size === 0) {
+    showErrorModal({
+      title: 'No documents added',
+      message: 'Please add at least one PDF document before creating a bundle. (Section breaks alone cannot form a bundle).'
+    });
     return;
   }
 
@@ -1804,8 +1895,12 @@ async function runPreviewIndex() {
     }
   });
 
-  if (indexData.length === 0) {
-    showErrorModal({ title: 'No documents added', message: 'Please add at least one document before generating an index preview.' });
+  const documentCount = indexData.filter(e => e.sectionMarker !== 1).length;
+  if (documentCount === 0 || filesMap.size === 0) {
+    showErrorModal({
+      title: 'No documents added',
+      message: 'Please add at least one PDF document before generating an index preview. (Section breaks alone cannot form a preview).'
+    });
     return;
   }
 

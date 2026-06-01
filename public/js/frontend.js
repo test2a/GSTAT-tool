@@ -1573,6 +1573,15 @@ function showErrorModal({ title, message, error } = {}) {
 }
 
 function showMissingInfoModal(actionType) {
+  // If the claim number input's container is hidden (e.g. GSTAT preset active), bypass/hide the warning modal completely
+  const claimNumberEl = document.getElementById('config-claimNumber');
+  if (claimNumberEl) {
+    const claimWrapper = claimNumberEl.closest('div');
+    if (claimWrapper && (claimWrapper.style.display === 'none' || claimWrapper.classList.contains('hidden') || claimWrapper.offsetParent === null)) {
+      return false;
+    }
+  }
+
   const missing = bundleInfoFields.filter(f => {
     const el = document.getElementById(f.id);
     if (!el) return false;

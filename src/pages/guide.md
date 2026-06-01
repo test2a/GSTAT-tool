@@ -31,19 +31,16 @@ You can save time by naming the files with ther dates and document names, for ex
 ## How many volumes do you need?
 
 It's usually best not to make bundles more than 20MB in file size as the GSTAT website is currently only accepting documents with a single file max size of 20MBs. The tool will warn you for large file sizes, but the choice is up to you (though there is hard limit of 500MB).
-
-
-If you have more than this, consider making two volumes. In a simple case, all the documents for a hearing can fit into one bundle, but it's common for trials to have many different bundles, especially in complex cases. These can be grouped into themes, like `A: Statements of Case` and `B: Evidence` for example. 
+## Select Template
+Select GSTAT template from the dropdown and click apply. The sections and some settings will get auto populated.
 
 ## Click 'Create Bundle' and Enter Bundle Details
 
 On the Create Bundle page, start by entering your bundle information:
 
 - **Bundle Title:** e.g., "Index"
-- **Claim Number:** The court reference number
 - **Case Name:** e.g., "Tata Motors Vs STO"
 
-If the bundle contains sensitive information, click the `confidential` box. A "Confidential" notice will be added to the first page and the filename. 
 
 
 ## Choose your Documents and Review the Index
@@ -60,6 +57,8 @@ The Tool will automatically extract dates from filenames where possible and sugg
 ## Create Bundle
 
 Click "Create Bundle" and wait a few seconds while The tool processes everything on your device. When complete, your browser will open the finished PDF bundle.
+Download the documents split by sections.
+There is a checkbox that annexes cover and index to the "appeal" as an optional function.
 
 The tool will create a professional-quality frontmatter index for you, and it'll also organise page numbering, bookmarks and hyperlinks.
 

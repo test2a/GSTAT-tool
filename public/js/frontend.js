@@ -1270,7 +1270,6 @@ function showBundleReadyState(pdfBytes, filename) {
 
     document.getElementById('overlay-save-btn')?.addEventListener('click', () => {
       _triggerDownload(pdfBytes, filename);
-      hideProcessingOverlay();
     });
     document.getElementById('overlay-close-x')?.addEventListener('click', () => hideProcessingOverlay());
     document.getElementById('overlay-edit-btn')?.addEventListener('click', () => hideProcessingOverlay());

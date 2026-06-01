@@ -1573,7 +1573,16 @@ function showErrorModal({ title, message, error } = {}) {
 }
 
 function showMissingInfoModal(actionType) {
-  const missing = bundleInfoFields.filter(f => !document.getElementById(f.id).value.trim()).map(f => f.label);
+  const missing = bundleInfoFields.filter(f => {
+    const el = document.getElementById(f.id);
+    if (!el) return false;
+    // Skip checking if the field or its containing wrapper is hidden
+    const wrapper = el.closest('div');
+    if (wrapper && (wrapper.style.display === 'none' || wrapper.classList.contains('hidden') || wrapper.offsetParent === null)) {
+      return false;
+    }
+    return !el.value.trim();
+  }).map(f => f.label);
   if (missing.length === 0) return false;
   const formatted = missing.length === 1
     ? missing[0]

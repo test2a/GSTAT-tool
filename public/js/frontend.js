@@ -380,11 +380,23 @@ window.addEventListener('DOMContentLoaded', () => {
         // 1. Add GSTAT standard sections if they aren't already present
         const existingSections = Array.from(fileTableBody.querySelectorAll('.section-break-title')).map(el => el.value.trim());
         const gstatSections = [
-          'Part 1: Statements of Case & Pleadings',
-          'Part 2: Orders & Directions',
-          'Part 3: Witness Statements & Evidence',
-          'Part 4: Expert Reports',
-          'Part 5: Correspondence & Other Documents'
+          'Appeal',
+          'Affidavits',
+          'Annexures',
+          'Impugned order Apl-04',
+          'Vakalatnama/Authorization letter',
+          'Payment Receipt',
+          'High Cour orders or self calculation Sheet',
+          'Condonation of Delay',
+          'Show Cause Notice',
+          'Order in original DRC-07',
+          'apl-01 apl-03',
+          'Previous Payment Particulars',
+          'Pre deposit at first Appellate Authority',
+          'pre Deposit at time of filing of appeal at GSTAT',
+          'Statement of Facts',
+          'Grounds of Appeal'
+
         ];
 
         gstatSections.forEach(title => {
